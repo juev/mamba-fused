@@ -17,6 +17,13 @@ ENV CUDA_HOME=/usr/local/cuda \
     MAMBA_FORCE_BUILD=TRUE \
     MAX_JOBS=2
 
+# The base image ships neither git (needed to clone the kernel sources) nor a host
+# C++ toolchain for nvcc. On vast.ai these come from the instance provisioning, not
+# the image — a clean docker build must install them explicitly.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
 # causal-conv1d first (mamba-ssm links against it). --no-build-isolation so it builds
 # against the image's torch, not a fresh PyPI wheel (ABI mismatch otherwise).
 RUN git clone -q --branch v1.2.0.post2 --depth 1 https://github.com/Dao-AILab/causal-conv1d.git /tmp/causal-conv1d \
