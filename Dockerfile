@@ -13,6 +13,10 @@
 # cu12torch2.10 matches this image's torch; cp312 matches its CPython.
 FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-runtime
 
+# This base image marks its python as externally-managed (PEP 668); pip refuses to
+# install without an override. One env var covers every pip call below.
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
 ARG CAUSAL_CONV1D_WHL=https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.2.post1/causal_conv1d-1.6.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 ARG MAMBA_SSM_WHL=https://github.com/state-spaces/mamba/releases/download/v2.3.2.post1/mamba_ssm-2.3.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 
