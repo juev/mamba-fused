@@ -17,6 +17,11 @@ FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-runtime
 # install without an override. One env var covers every pip call below.
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
+# vast.ai injects the SSH key into /root/.ssh/authorized_keys at boot; sshd StrictModes
+# then refuses login ("bad ownership or modes") if /root or /root/.ssh is group/world-
+# writable. The runtime base leaves them too open — lock them down so SSH actually works.
+RUN mkdir -p /root/.ssh && chmod 700 /root /root/.ssh
+
 ARG CAUSAL_CONV1D_WHL=https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.2.post1/causal_conv1d-1.6.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 ARG MAMBA_SSM_WHL=https://github.com/state-spaces/mamba/releases/download/v2.3.2.post1/mamba_ssm-2.3.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 
