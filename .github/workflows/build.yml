@@ -48,7 +48,7 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/juev/mamba-fused:cu121-torch23-sm89
+            ghcr.io/juev/mamba-fused:cu126-torch210-sm89
             ghcr.io/juev/mamba-fused:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

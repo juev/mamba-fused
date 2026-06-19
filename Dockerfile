@@ -1,40 +1,26 @@
-# Fused Mamba CUDA kernels baked into the image — drop-in for vast.ai RTX 4090 runs.
+# Fused Mamba kernels baked into the image — drop-in for vast.ai RTX 4090 (sm_89).
 #
-# Replaces the ~15 min per-run source compile (build_kernels.sh in juev/llm) with a
-# one-time CI build. The base devel image ships nvcc, so causal-conv1d and mamba-ssm
-# cross-compile for sm_89 (RTX 4090) WITHOUT a GPU at build time — TORCH_CUDA_ARCH_LIST
-# is what makes that work. +PTX keeps forward-compat (newer GPUs JIT from PTX).
+# Packages are IDENTICAL to the validated juev/llm stack (2026-06-18, transformers 5):
+# torch 2.10.0+cu126, causal-conv1d 1.6.2.post1, mamba-ssm 2.3.2.post1, transformers 5,
+# einops — installed from the SAME prebuilt wheels, so there is no source compile and
+# no nvcc. That also lets us use the smaller *runtime* base instead of *devel*.
 #
-# Pins mirror the verified recipe (vast-ai skill, 2026-06-16): torch 2.3.0 / cu121,
-# causal-conv1d v1.2.0.post2, mamba v1.2.0.post1, transformers 4.40.2 (has Mamba +
-# the generation aliases mamba-ssm 1.2.0 still imports).
-FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-devel
+# The HF `kernels` library is deliberately NOT installed: when present, transformers
+# prefers a Hub kernel whose fully-fused mamba_inner_fn can't find causal_conv1d_cuda,
+# and Mamba training breaks. The classic prebuilt wheels expose it correctly.
+#
+# Prebuilt wheels exist up to torch 2.10 (not 2.12 yet) → torch 2.10 base image.
+# cu12torch2.10 matches this image's torch; cp312 matches its CPython.
+FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-runtime
 
-ENV CUDA_HOME=/usr/local/cuda \
-    PATH=/usr/local/cuda/bin:$PATH \
-    TORCH_CUDA_ARCH_LIST="8.9+PTX" \
-    CAUSAL_CONV1D_FORCE_BUILD=TRUE \
-    MAMBA_FORCE_BUILD=TRUE \
-    MAX_JOBS=2
+ARG CAUSAL_CONV1D_WHL=https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.2.post1/causal_conv1d-1.6.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+ARG MAMBA_SSM_WHL=https://github.com/state-spaces/mamba/releases/download/v2.3.2.post1/mamba_ssm-2.3.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 
-# The base image ships neither git (needed to clone the kernel sources) nor a host
-# C++ toolchain for nvcc. On vast.ai these come from the instance provisioning, not
-# the image — a clean docker build must install them explicitly.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends git build-essential \
- && rm -rf /var/lib/apt/lists/*
+# --no-deps: the wheels declare a loose `torch` requirement; without it pip would pull
+# a newer torch (cu130) over the image's matched 2.10/cu126 and break the kernel ABI.
+RUN pip install --no-cache-dir --no-deps "$CAUSAL_CONV1D_WHL" "$MAMBA_SSM_WHL" \
+ && pip install --no-cache-dir einops "transformers>=5,<6" datasets tqdm
 
-# causal-conv1d first (mamba-ssm links against it). --no-build-isolation so it builds
-# against the image's torch, not a fresh PyPI wheel (ABI mismatch otherwise).
-RUN git clone -q --branch v1.2.0.post2 --depth 1 https://github.com/Dao-AILab/causal-conv1d.git /tmp/causal-conv1d \
- && pip install --no-build-isolation /tmp/causal-conv1d \
- && rm -rf /tmp/causal-conv1d
-
-RUN git clone -q --branch v1.2.0.post1 --depth 1 https://github.com/state-spaces/mamba.git /tmp/mamba \
- && pip install --no-build-isolation /tmp/mamba \
- && rm -rf /tmp/mamba
-
-RUN pip install --no-cache-dir "transformers==4.40.2" datasets tqdm
-
-# Fail the build here if kernels don't import — better than discovering it on vast.
+# Fail the build here if the kernels don't import (ABI mismatch surfaces on load) —
+# better than discovering it on vast. Runs without a GPU on the CI runner.
 RUN python -c "import causal_conv1d, mamba_ssm; print('kernels import OK', causal_conv1d.__version__, mamba_ssm.__version__)"
