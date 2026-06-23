@@ -32,6 +32,12 @@ RUN mkdir -p /root/.ssh \
       sed -i 's/^#*StrictModes.*/StrictModes no/' /etc/ssh/sshd_config; \
     fi
 
+# rsync/git/curl/wget: not in the runtime base; needed to push/pull code & checkpoints,
+# clone repos, and fetch artifacts on the instance.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends rsync git curl wget \
+ && rm -rf /var/lib/apt/lists/*
+
 ARG CAUSAL_CONV1D_WHL=https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.2.post1/causal_conv1d-1.6.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 ARG MAMBA_SSM_WHL=https://github.com/state-spaces/mamba/releases/download/v2.3.2.post1/mamba_ssm-2.3.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 
