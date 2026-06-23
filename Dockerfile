@@ -18,9 +18,19 @@ FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-runtime
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # vast.ai injects the SSH key into /root/.ssh/authorized_keys at boot; sshd StrictModes
-# then refuses login ("bad ownership or modes") if /root or /root/.ssh is group/world-
-# writable. The runtime base leaves them too open — lock them down so SSH actually works.
-RUN mkdir -p /root/.ssh && chmod 700 /root /root/.ssh
+# then refuses login ("bad ownership or modes") if /root, /root/.ssh, or the
+# authorized_keys file are group/world-writable. The runtime base leaves them too open.
+#
+# Fix directories + pre-create authorized_keys with 600 (vast may append, not overwrite).
+# Also nuke StrictModes in sshd_config as a backstop — the instance is single-user root,
+# temporary, and key-only auth; the check adds no value here.
+RUN mkdir -p /root/.ssh \
+ && touch /root/.ssh/authorized_keys \
+ && chmod 700 /root /root/.ssh \
+ && chmod 600 /root/.ssh/authorized_keys \
+ && if [ -f /etc/ssh/sshd_config ]; then \
+      sed -i 's/^#*StrictModes.*/StrictModes no/' /etc/ssh/sshd_config; \
+    fi
 
 ARG CAUSAL_CONV1D_WHL=https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.2.post1/causal_conv1d-1.6.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 ARG MAMBA_SSM_WHL=https://github.com/state-spaces/mamba/releases/download/v2.3.2.post1/mamba_ssm-2.3.2.post1%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
